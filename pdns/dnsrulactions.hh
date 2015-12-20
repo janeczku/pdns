@@ -391,6 +391,59 @@ private:
   ComboAddress d_aaaa;
 };
 
+class SpoofcAction : public DNSAction
+{
+public:
+  SpoofcAction(const std::string& domain) : d_domain(domain) {}
+  DNSAction::Action operator()(const ComboAddress& remote, const DNSName& qname, uint16_t qtype, dnsheader* dh, uint16_t& len, string* ruleresult) const override
+  {
+    if(qtype != QType::A)
+      return Action::None;
+
+    dh->qr = true; // for good measure
+    dh->ra = dh->rd; // maybe set to false for cname response
+    //dh->aa = true; // Authoritative Answer?
+    dh->ad = false;
+    dh->ancount = htons(1);
+    dh->arcount = 0; // for now, forget about your EDNS, we're marching over it 
+    unsigned int consumed=0;
+
+    DNSName ignore((char*)dh, len, sizeof(dnsheader), false, 0, 0, &consumed);
+
+    char* dest = ((char*)dh) +sizeof(dnsheader) + consumed + 4;
+
+    const char* domain_c_str = d_domain.c_str(); // necessary?
+    data_len_ = strlen(domain_c_str)+1;
+    // data_len_ = htons(strlen(domain_c_str)+1);
+    // MALLOCCHECK((data_ = (char*) malloc(ntohs(data_len_))));
+    // memcpy(data_, domain_c_str, ntohs(data_len_));
+
+    //uint8_t addrlen = 4;
+
+    const unsigned char recordstart[]={
+              0xc0, 0x0c,             // Pointer to name in Question section.
+              0x00, 0x05,             // TYPE is CNAME.
+              0x00, 0x01,             // CLASS is IN.
+              0x00, 0x00, 0x00, 0x78, // TTL 120
+              0, data_len_,           // RDLENGTH or (uint8_t)data_len_
+    };
+    
+    memcpy(dest, recordstart, sizeof(recordstart));
+
+    memcpy(dest+sizeof(recordstart), domain_c_str, data_len_);
+
+    //memcpy(dest+sizeof(recordstart), &d_a.sin4.sin_addr.s_addr, 4);
+
+    len = (dest + sizeof(recordstart) + data_len_) - (char*)dh;
+    return Action::HeaderModify;
+  }
+  string toString() const override
+  {
+    return "spoof in "+d_domain;
+  }
+private:
+  string d_domain;
+};
 
 class NoRecurseAction : public DNSAction
 {

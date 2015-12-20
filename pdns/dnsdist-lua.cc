@@ -71,12 +71,13 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
   typedef std::unordered_map<std::string, boost::variant<bool, std::string, vector<pair<int, std::string> > > > newserver_t;
 
   g_lua.writeVariable("DNSAction", std::unordered_map<string,int>{
-      {"Drop", (int)DNSAction::Action::Drop}, 
-      {"Nxdomain", (int)DNSAction::Action::Nxdomain}, 
-      {"Spoof", (int)DNSAction::Action::Spoof}, 
-      {"Allow", (int)DNSAction::Action::Allow}, 
+      {"Drop", (int)DNSAction::Action::Drop},
+      {"Nxdomain", (int)DNSAction::Action::Nxdomain},
+      {"Spoof", (int)DNSAction::Action::Spoof},
+      {"Spoofc", (int)DNSAction::Action::Spoofc},
+      {"Allow", (int)DNSAction::Action::Allow},
       {"HeaderModify", (int)DNSAction::Action::HeaderModify},
-      {"Pool", (int)DNSAction::Action::Pool}, 
+      {"Pool", (int)DNSAction::Action::Pool},
       {"None",(int)DNSAction::Action::Pool}}
     );
   
@@ -420,7 +421,6 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
 			  });
 		      });
 
-
   g_lua.writeFunction("NoRecurseAction", []() {
       return std::shared_ptr<DNSAction>(new NoRecurseAction);
     });
@@ -434,6 +434,10 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
 	return std::shared_ptr<DNSAction>(new SpoofAction(ComboAddress(a), ComboAddress(*b)));
       else 
 	return std::shared_ptr<DNSAction>(new SpoofAction(ComboAddress(a)));
+    });
+
+  g_lua.writeFunction("SpoofcAction", [](const string& a) {
+      return std::shared_ptr<DNSAction>(new SpoofcAction(a));
     });
 
   g_lua.writeFunction("addDomainSpoof", [](const std::string& domain, const std::string& ip, boost::optional<string> ip6) { 
@@ -459,6 +463,20 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
 	});
 
     });
+
+  g_lua.writeFunction("addDomainSpoofc", [](const std::string& domain, const std::string& cname) { 
+      setLuaSideEffect();
+      SuffixMatchNode smn;
+      smn.add(DNSName(domain));
+      g_rulactions.modify([&smn,&cname](decltype(g_rulactions)::value_type& rulactions) {
+    rulactions.push_back({
+        std::make_shared<SuffixMatchNodeRule>(smn), 
+    std::make_shared<SpoofcAction>(cname)  });
+  });
+
+    });
+
+  g_rulactions.modify([rule, pool](decltype(g_rulactions)::value_type& rulactions) {
 
 
   g_lua.writeFunction("DropAction", []() {

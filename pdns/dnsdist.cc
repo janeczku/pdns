@@ -570,6 +570,8 @@ try
 
       case DNSAction::Action::Spoof:
 	;
+      case DNSAction::Action::Spoofc:
+  ;
       case DNSAction::Action::HeaderModify:
 	dh->qr=true;
 	break;
