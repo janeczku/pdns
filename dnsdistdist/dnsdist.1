@@ -1,0 +1,126 @@
+.TH "DNSDIST" "1" "2013" "" ""
+.SH NAME
+.PP
+\f[B]dnsdist\f[] \- tool to balance DNS queries over downstream servers
+.SH SYNOPSIS
+.PP
+dnsdist [\f[I]OPTION\f[]]...
+\f[I]ADDRESS\f[]...
+.SH DESCRIPTION
+.PP
+\f[B]dnsdist\f[] receives DNS queries and relays them to one or more
+downstream servers.
+It subsequently sends back responses to the original requestor.
+.PP
+dnsdist operates over TCP and UDP, and strives to deliver very high
+performance over both.
+.PP
+Currently, queries are sent to the downstream server with the least
+outstanding queries.
+This effectively implies load balancing, making sure that slower servers
+get less queries.
+.PP
+If a reply has not come in after a few seconds, it is removed from the
+queue, but in the short term, timeouts do cause a server to get less
+traffic.
+.PP
+IPv4 and IPv6 operation can be mixed and matched, in other words,
+queries coming in over IPv6 could be forwarded to IPv4 and vice versa.
+.PP
+\f[B]dnsdist\f[] is scriptable in Lua, see the dnsdist documentation for
+more information on this.
+.SH SCOPE
+.PP
+dnsdist does not \[aq]think\[aq] about DNS, and does not perform any
+kind of caching, nor is it aware of the quality of the answers it is
+relaying.
+.PP
+dnsdist assumes that each query leads to exactly one response, which is
+true for all DNS except for AXFR, which is therefore not supported.
+.PP
+The goal for dnsdist is to remain simple.
+If more powerful loadbalancing is required, dedicated hardware or
+software is recommended.
+Linux Virtual Server for example is often mentioned.
+.SH OPTIONS
+.TP
+.B \-a,\-\-acl \f[I]NETMASK\f[]
+Add \f[I]NETMASK\f[] to the ACL.
+.RS
+.RE
+.TP
+.B \-C,\-\-config \f[I]FILE\f[]
+Load configuration from \f[I]FILE\f[].
+.RS
+.RE
+.TP
+.B \-c,\-\-client
+Operate as a client, connect to dnsdist.
+.RS
+.RE
+.TP
+.B \-d,\-\-daemon
+Operate as a daemon.
+.RS
+.RE
+.TP
+.B \-e,\-\-execute \f[I]CMD\f[]
+Connect to dnsdist and execute \f[I]CMD\f[].
+.RS
+.RE
+.TP
+.B \-h,\-\-help
+Display a helpful message and exit.
+.RS
+.RE
+.TP
+.B \-l,\-\-local \f[I]ADDRESS\f[]
+Bind to \f[I]ADDRESS\f[], Supply as many addresses (using multiple
+\f[B]\-\-local\f[] statements) to listen on as required.
+Specify IPv4 as 0.0.0.0:53 and IPv6 as [::]:53.
+.RS
+.RE
+.TP
+.B \-\-supervised
+Run in foreground, but do not spawn a console.
+Use this switch to run dnsdist inside a supervisor (use with e.g.
+systemd and daemontools).
+.RS
+.RE
+.TP
+.B \-p,\-\-pidfile \f[I]FILE\f[]
+Write a pidfile to \f[I]FILE\f[], works only with \f[B]\-\-daemon\f[].
+.RS
+.RE
+.TP
+.B \-u,\-\-uid \f[I]UID\f[]
+Change the process user to \f[I]UID\f[] after binding sockets.
+\f[I]UID\f[] can be a name or number.
+.RS
+.RE
+.TP
+.B \-g,\-\-gid \f[I]GID\f[]
+Change the process group to \f[I]GID\f[] after binding sockets.
+\f[I]GID\f[] Can be a name or number.
+.RS
+.RE
+.TP
+.B \-V,\-\-version
+Show the dnsdist version and exit.
+.RS
+.RE
+.TP
+.B ADDRESS
+Any number of downstream DNS servers, in the same syntax as used with
+\f[B]\-\-local\f[].
+If the port is not specified, 53 is used.
+.RS
+.RE
+.SH BUGS
+.PP
+Right now, the TCP support has some rather arbitrary limits.
+.SH RESOURCES
+.PP
+Website: http://dnsdist.org
+.SH AUTHORS
+PowerDNS.com BV.

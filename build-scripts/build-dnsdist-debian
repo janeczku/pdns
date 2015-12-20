@@ -11,7 +11,7 @@ if [ -z "$VERSION" ]; then
 fi
 
 if [ -z "$DISTDIR" ]; then
-  DISTDIR='pdns/dnsdistdist'
+  DISTDIR='./dnsdistdist'
 fi
 
 if [ -z "$RELEASE" ];then
