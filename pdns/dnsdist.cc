@@ -227,9 +227,9 @@ void* responderThread(std::shared_ptr<DownstreamState> state)
     }
     else {
       if(ids->origDest.sin4.sin_family == 0)
-	sendto(origFD, response, responseLen, 0, (struct sockaddr*)&ids->origRemote, ids->origRemote.getSocklen());
+  sendto(origFD, response, responseLen, 0, (struct sockaddr*)&ids->origRemote, ids->origRemote.getSocklen());
       else
-	sendfromto(origFD, response, responseLen, 0, ids->origDest, ids->origRemote);
+  sendfromto(origFD, response, responseLen, 0, ids->origDest, ids->origRemote);
     }
     double udiff = ids->sentTime.udiff();
     vinfolog("Got answer from %s, relayed to %s, took %f usec", state->remote.toStringWithPort(), ids->origRemote.toStringWithPort(), udiff);
@@ -486,8 +486,8 @@ try
       g_stats.queries++;
 
       if(ret < (int)sizeof(struct dnsheader)) {
-	g_stats.nonCompliantQueries++;
-	continue;
+  g_stats.nonCompliantQueries++;
+  continue;
       }
       uint16_t len=ret;
       if (msgh.msg_flags & MSG_TRUNC) {
@@ -498,14 +498,14 @@ try
       }
 
       if(!acl->match(remote)) {
-	vinfolog("Query from %s dropped because of ACL", remote.toStringWithPort());
-	g_stats.aclDrops++;
-	continue;
+  vinfolog("Query from %s dropped because of ACL", remote.toStringWithPort());
+  g_stats.aclDrops++;
+  continue;
       }
       
       if(dh->qr) {   // don't respond to responses
-	g_stats.nonCompliantQueries++;
-	continue;
+  g_stats.nonCompliantQueries++;
+  continue;
       }
 
       if (dh->rd) {
@@ -524,21 +524,21 @@ try
       }
       
       if(auto got=localDynBlock->lookup(remote)) {
-	if(now < got->second.until) {
-	  vinfolog("Query from %s dropped because of dynamic block", remote.toStringWithPort());
-	  g_stats.dynBlocked++;
-	  got->second.blocks++;
-	  continue;
-	}
+  if(now < got->second.until) {
+    vinfolog("Query from %s dropped because of dynamic block", remote.toStringWithPort());
+    g_stats.dynBlocked++;
+    got->second.blocks++;
+    continue;
+  }
       }
 
       if(blockFilter) {
-	std::lock_guard<std::mutex> lock(g_luamutex);
-	
-	if(blockFilter(remote, qname, qtype, dh)) {
-	  g_stats.blockFilter++;
-	  continue;
-	}
+  std::lock_guard<std::mutex> lock(g_luamutex);
+  
+  if(blockFilter(remote, qname, qtype, dh)) {
+    g_stats.blockFilter++;
+    continue;
+  }
       }
 
       DNSAction::Action action=DNSAction::Action::None;
@@ -546,64 +546,114 @@ try
       string pool;
 
       for(const auto& lr : *localRulactions) {
-	if(lr.first->matches(remote, qname, qtype, dh, len)) {
-	  action=(*lr.second)(remote, qname, qtype, dh, len, &ruleresult);
-	  if(action != DNSAction::Action::None) {
-	    lr.first->d_matches++;
-	    break;
-	  }
-	}
+  if(lr.first->matches(remote, qname, qtype, dh, len)) {
+    action=(*lr.second)(remote, qname, qtype, dh, len, &ruleresult);
+    if(action != DNSAction::Action::None) {
+      lr.first->d_matches++;
+      break;
+    }
+  }
       }
       int delayMsec=0;
       switch(action) {
       case DNSAction::Action::Drop:
-	g_stats.ruleDrop++;
-	continue;
+  g_stats.ruleDrop++;
+  continue;
       case DNSAction::Action::Nxdomain:
-	dh->rcode = RCode::NXDomain;
-	dh->qr=true;
-	g_stats.ruleNXDomain++;
-	break;
+  dh->rcode = RCode::NXDomain;
+  dh->qr=true;
+  g_stats.ruleNXDomain++;
+  break;
       case DNSAction::Action::Pool: 
-	pool=ruleresult;
-	break;
+  pool=ruleresult;
+  break;
 
       case DNSAction::Action::Spoof:
-	;
+  ;
+      case DNSAction::Action::SpoofCname:
+  ;
       case DNSAction::Action::HeaderModify:
-	dh->qr=true;
-	break;
+  dh->qr=true;
+  break;
 
       case DNSAction::Action::Delay:
-	delayMsec = atoi(ruleresult.c_str()); // sorry
-	break;
+  delayMsec = atoi(ruleresult.c_str()); // sorry
+  break;
       case DNSAction::Action::Allow:
       case DNSAction::Action::None:
-	break;
+  break;
       }
 
-      if(dh->qr) { // something turned it into a response
-	g_stats.selfAnswered++;
-	ComboAddress dest;
-	if(HarvestDestinationAddress(&msgh, &dest)) 
-	  sendfromto(cs->udpFD, packet, len, 0, dest, remote);
-	else
-	  sendto(cs->udpFD, packet, len, 0, (struct sockaddr*)&remote, remote.getSocklen());
+  if (action == DNSAction::Action::SpoofCname && qtype == QType::A) {
+    string d_domain;
+    d_domain=ruleresult;
+    dh->qr = true; // for good measure
+    dh->ra = dh->rd; // maybe set to false for cname response
+    dh->aa = true; // Authoritative Answer?
+    dh->ad = false;
+    dh->ancount = htons(1);
+    dh->arcount = 0; // for now, forget about your EDNS, we're marching over it 
+    unsigned int consumed=0;
 
-	continue;
+    DNSName ignore((char*)dh, len, sizeof(dnsheader), false, 0, 0, &consumed);
+
+    char* dest = ((char*)dh) +sizeof(dnsheader) + consumed + 4;
+
+    uint8_t cname_len_;
+    cname_len_ = d_domain.size()+2;
+
+    DNSName myname;
+    myname=DNSName(d_domain);
+    string encoded_name;
+    if(!myname.countLabels()) {
+      encoded_name = string (1, 0);
+    }
+    else {
+      auto parts = myname.getRawLabels();
+      for(auto &label: parts) {
+        encoded_name.append(1, label.size());
+        encoded_name.append(label);
+      }
+      encoded_name.append(1, 0);
+    }
+
+    const unsigned char recordstart[]={
+              0xc0, 0x0c,             // Pointer to name in Question section.
+              0x00, 0x05,             // TYPE is CNAME.
+              0x00, 0x01,             // CLASS is IN.
+              0x00, 0x00, 0x00, 0x78, // TTL 120
+              0, cname_len_,          // RDLENGTH or (uint8_t)data_len_
+    };
+    
+    memcpy(dest, recordstart, sizeof(recordstart));
+
+    memcpy(dest+sizeof(recordstart), encoded_name.c_str(), encoded_name.size());
+
+    len = (dest + sizeof(recordstart) + encoded_name.size()) - (char*)dh;
+  }
+
+      if(dh->qr) { // something turned it into a response
+  g_stats.selfAnswered++;
+  ComboAddress dest;
+  if(HarvestDestinationAddress(&msgh, &dest)) 
+    sendfromto(cs->udpFD, packet, len, 0, dest, remote);
+  else
+    sendto(cs->udpFD, packet, len, 0, (struct sockaddr*)&remote, remote.getSocklen());
+
+  continue;
       }
 
       DownstreamState* ss = 0;
       auto candidates=getDownstreamCandidates(*localServers, pool);
       auto policy=localPolicy->policy;
       {
-	std::lock_guard<std::mutex> lock(g_luamutex);
-	ss = policy(candidates, remote, qname, qtype, dh).get();
+  std::lock_guard<std::mutex> lock(g_luamutex);
+  ss = policy(candidates, remote, qname, qtype, dh).get();
       }
 
       if(!ss) {
-	g_stats.noPolicy++;
-	continue;	
+  g_stats.noPolicy++;
+  continue; 
       }
       
       ss->queries++;
@@ -646,8 +696,8 @@ try
       }
       
       if(len < 0) {
-	ss->sendErrors++;
-	g_stats.downstreamSendErrors++;
+  ss->sendErrors++;
+  g_stats.downstreamSendErrors++;
       }
 
       vinfolog("Got query from %s, relayed to %s", remote.toStringWithPort(), ss->getName());
@@ -730,11 +780,11 @@ void* maintThread()
 
     for(auto& dss : g_dstates.getCopy()) { // this points to the actual shared_ptrs!
       if(dss->availability==DownstreamState::Availability::Auto) {
-	bool newState=upCheck(dss->remote, dss->checkName, dss->checkType, dss->mustResolve);
-	if(newState != dss->upStatus) {
-	  warnlog("Marking downstream %s as '%s'", dss->getNameWithAddr(), newState ? "up" : "down");
-	}
-	dss->upStatus = newState;
+  bool newState=upCheck(dss->remote, dss->checkName, dss->checkType, dss->mustResolve);
+  if(newState != dss->upStatus) {
+    warnlog("Marking downstream %s as '%s'", dss->getNameWithAddr(), newState ? "up" : "down");
+  }
+  dss->upStatus = newState;
       }
 
       auto delta = dss->sw.udiffAndSet()/1000000.0;
@@ -749,10 +799,10 @@ void* maintThread()
           ids.origFD = -1;
           dss->reuseds++;
           --dss->outstanding;
-	  struct timespec ts;
-	  clock_gettime(CLOCK_MONOTONIC, &ts);
-	  std::lock_guard<std::mutex> lock(g_rings.respMutex);
-	  g_rings.respRing.push_back({ts, ids.origRemote, ids.qname, ids.qtype, 0, 2000000, 0});
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    std::lock_guard<std::mutex> lock(g_rings.respMutex);
+    g_rings.respRing.push_back({ts, ids.origRemote, ids.qname, ids.qtype, 0, 2000000, 0});
         }          
       }
     }
