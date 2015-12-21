@@ -261,6 +261,7 @@ void* tcpClientThread(int pipefd)
     char* dest = ((char*)dh) +sizeof(dnsheader) + consumed + 4;
 
     uint8_t cname_len_;
+
     //cname_len_ = d_domain.size()+1;
 
     DNSName myname;
@@ -277,6 +278,7 @@ void* tcpClientThread(int pipefd)
       }
       encoded_name.append(1, 0);
     }
+
     cname_len_ = (uint8_t) encoded_name.size();
 
     const unsigned char recordstart[]={
