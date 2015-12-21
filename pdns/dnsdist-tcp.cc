@@ -250,7 +250,7 @@ void* tcpClientThread(int pipefd)
     d_domain=ruleresult;
     dh->qr = true; // for good measure
     dh->ra = dh->rd; // maybe set to false for cname response
-    dh->aa = true; // Authoritative Answer?
+    //dh->aa = true; // Authoritative Answer?
     dh->ad = false;
     dh->ancount = htons(1);
     dh->arcount = 0; // for now, forget about your EDNS, we're marching over it 
