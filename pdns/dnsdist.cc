@@ -600,7 +600,7 @@ try
     char* dest = ((char*)dh) +sizeof(dnsheader) + consumed + 4;
 
     uint8_t cname_len_;
-    cname_len_ = d_domain.size()+2;
+    cname_len_ = d_domain.size()+1;
 
     DNSName myname;
     myname=DNSName(d_domain);
