@@ -310,6 +310,7 @@ struct DownstreamState
   enum class Availability { Up, Down, Auto} availability{Availability::Auto};
   bool mustResolve;
   bool upStatus{false};
+  int failedChecks;
   bool useECS{false};
   bool isUp() const
   {
