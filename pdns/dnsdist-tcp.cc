@@ -255,6 +255,8 @@ void* tcpClientThread(int pipefd)
 	  
 	case DNSAction::Action::Spoof:
 	  ;
+  case DNSAction::Action::SpoofCname:
+    ;
 	case DNSAction::Action::HeaderModify:
 	  break;
 	case DNSAction::Action::Allow:
@@ -263,6 +265,53 @@ void* tcpClientThread(int pipefd)
 	  break;
 	}
 	
+  if (action == DNSAction::Action::SpoofCname && qtype == QType::A) {
+    string d_domain;
+    d_domain=ruleresult;
+    dh->qr = true; // for good measure
+    dh->ra = dh->rd; // maybe set to false for cname response
+    dh->ad = false;
+    dh->ancount = htons(1);
+    dh->arcount = 0; // for now, forget about your EDNS, we're marching over it 
+    unsigned int consumed=0;
+
+    DNSName ignore((char*)dh, queryLen, sizeof(dnsheader), false, 0, 0, &consumed);
+
+    char* dest = ((char*)dh) +sizeof(dnsheader) + consumed + 4;
+
+    DNSName myname;
+    myname=DNSName(d_domain);
+    string encoded_name;
+    if(!myname.countLabels()) {
+      encoded_name = string (1, 0);
+    }
+    else {
+      auto parts = myname.getRawLabels();
+      for(auto &label: parts) {
+        encoded_name.append(1, label.size());
+        encoded_name.append(label);
+      }
+      encoded_name.append(1, 0);
+    }
+
+    uint8_t cname_len_;
+    cname_len_ = (uint8_t) encoded_name.size();
+
+    const unsigned char recordstart[]={
+              0xc0, 0x0c,             // Pointer to name in Question section.
+              0x00, 0x05,             // TYPE is CNAME.
+              0x00, 0x01,             // CLASS is IN.
+              0x00, 0x00, 0x00, 0x78, // TTL 120
+              0, cname_len_,          // RDLENGTH or (uint8_t)data_len_
+    };
+    
+    memcpy(dest, recordstart, sizeof(recordstart));
+
+    memcpy(dest+sizeof(recordstart), encoded_name.c_str(), encoded_name.size());
+
+    queryLen = (dest + sizeof(recordstart) + encoded_name.size()) - (char*)dh;
+  }
+
 	if(dh->qr) { // something turned it into a response
 	  if (putNonBlockingMsgLen(ci.fd, queryLen, g_tcpSendTimeout))
 	    writen2WithTimeout(ci.fd, query, queryLen, g_tcpSendTimeout);

@@ -74,6 +74,7 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
       {"Drop", (int)DNSAction::Action::Drop}, 
       {"Nxdomain", (int)DNSAction::Action::Nxdomain}, 
       {"Spoof", (int)DNSAction::Action::Spoof}, 
+      {"SpoofCname", (int)DNSAction::Action::SpoofCname},
       {"Allow", (int)DNSAction::Action::Allow}, 
       {"HeaderModify", (int)DNSAction::Action::HeaderModify},
       {"Pool", (int)DNSAction::Action::Pool}, 
@@ -437,6 +438,10 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
 	return std::shared_ptr<DNSAction>(new SpoofAction(ComboAddress(a)));
     });
 
+  g_lua.writeFunction("SpoofCnameAction", [](const string& a) {
+      return std::shared_ptr<DNSAction>(new SpoofCnameAction(a));
+    });
+
   g_lua.writeFunction("addDomainSpoof", [](const std::string& domain, const std::string& ip, boost::optional<string> ip6) { 
       setLuaSideEffect();
       SuffixMatchNode smn;
@@ -461,6 +466,17 @@ vector<std::function<void(void)>> setupLua(bool client, const std::string& confi
 
     });
 
+  g_lua.writeFunction("addDomainSpoofCname", [](const std::string& domain, const std::string& cname) { 
+      setLuaSideEffect();
+      SuffixMatchNode smn;
+      smn.add(DNSName(domain));
+      g_rulactions.modify([&smn,&cname](decltype(g_rulactions)::value_type& rulactions) {
+    rulactions.push_back({
+        std::make_shared<SuffixMatchNodeRule>(smn), 
+    std::make_shared<SpoofCnameAction>(cname)  });
+  });
+
+    });
 
   g_lua.writeFunction("DropAction", []() {
       return std::shared_ptr<DNSAction>(new DropAction);
