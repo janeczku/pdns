@@ -965,7 +965,7 @@ void* maintThread()
 
 void* healthChecksThread()
 {
-  int interval = 1;
+  int interval = 2;
 
   for(;;) {
     sleep(interval);
@@ -977,9 +977,22 @@ void* healthChecksThread()
       if(dss->availability==DownstreamState::Availability::Auto) {
 	bool newState=upCheck(*dss);
 	if(newState != dss->upStatus) {
-	  warnlog("Marking downstream %s as '%s'", dss->getNameWithAddr(), newState ? "up" : "down");
-	}
-	dss->upStatus = newState;
+          if(!newState) { // server going down
+            dss->failedChecks++;
+            if(dss->failedChecks >= 3) {
+                warnlog("Marking downstream %s as '%s'", dss->getNameWithAddr(), "down");
+                dss->upStatus = false;
+                dss->failedChecks = 0;
+             }
+          }
+          else { // server going up
+             warnlog("Marking downstream %s as '%s'", dss->getNameWithAddr(), "up");
+             dss->upStatus = true;
+          }
+        }
+        else if (newState && dss->failedChecks > 0) {
+          dss->failedChecks = 0;
+        }
       }
 
       auto delta = dss->sw.udiffAndSet()/1000000.0;
